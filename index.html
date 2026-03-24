@@ -1322,7 +1322,7 @@ async function validateAndAdvance(){
     const res=await fetch(getApiUrl(),{method:'POST',headers:getApiHeaders(),body:JSON.stringify({model:'gemini-2.0-flash-lite',max_tokens:700,messages:[{role:'user',content:buildVPrompt(current)}]})});
     const data=await res.json();
     const text=data.content?.map(b=>b.text||'').join('')||'';
-    console.log('Respuesta IA:', text.substring(0,300));
+    console.log('Respuesta IA completa:', text);
     // Buscar calificación en varios formatos
     const scoreMatch = text.match(/(\d+)\s*\/\s*10/) || 
                        text.match(/[Cc]alificaci[oó]n[:\s]+(\d+)/) || 
@@ -1331,9 +1331,11 @@ async function validateAndAdvance(){
                        text.match(/puntaje[:\s]+(\d+)/i);
     const score = parseInt(scoreMatch?.[1] || '0');
     // Si no hay score pero el texto es positivo, aprobar
-    const positiveWords = ['excelente','aprobado','aprobada','muy bien','bien hecho','felicit','perfecto','correcto','completo','logrado'];
+    const positiveWords = ['excelente','aprobado','aprobada','muy bien','bien hecho','felicit','perfecto','correcto','completo','logrado','efectiv','coherent','comunica','claridad','solid','destaca','impresion','notable'];
+    const negativeWords = ['mejorar','incompleto','falta','insuficiente','débil','vago','confuso','poco claro'];
     const hasPositive = positiveWords.some(w => text.toLowerCase().includes(w));
-    const ok = score >= 6 || (score === 0 && hasPositive);
+    const hasNegative = negativeWords.some(w => text.toLowerCase().includes(w));
+    const ok = score >= 6 || (score === 0 && hasPositive && !hasNegative);
     sectionState[current]=ok?'approved':'incomplete';
     if(ok){approvalStreak++;awardXP(XP_PER);checkLogros();save();}else approvalStreak=0;
     renderVP(current,text,ok);updateNavUI();updateProgress();
