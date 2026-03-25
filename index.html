@@ -17,6 +17,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="apple-mobile-web-app-title" content="YoEmprendo"/>
 <link rel="manifest" id="manifestLink"/>
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/docx/7.8.2/docx.umd.min.js"></script>
 <script>
 // ── PWA: Inline Manifest ────────────────────────────────
@@ -1175,6 +1178,62 @@ textarea{min-height:85px}
 </div>
 
 <script>
+// ── FIREBASE CONFIG ────────────────────────────
+const firebaseConfig = {
+  apiKey: "AIzaSyCeCBGb49nZQM1U1iXwstxz5ZCz94Uc6uQ",
+  authDomain: "gen-lang-client-0556012828.firebaseapp.com",
+  projectId: "gen-lang-client-0556012828",
+  storageBucket: "gen-lang-client-0556012828.firebasestorage.app",
+  messagingSenderId: "40856414904",
+  appId: "1:40856414904:web:d0a76a8f1dc4d349a5a24d"
+};
+let db = null;
+let firestoreReady = false;
+let unsubscribeRealtime = null;
+
+function initFirebase(){
+  try{
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+    firestoreReady = true;
+    console.log('✅ Firebase conectado');
+  }catch(e){
+    console.warn('⚠️ Firebase no disponible, usando localStorage:', e.message);
+  }
+}
+
+// Guardar datos del grupo en Firestore
+async function saveToFirestore(grupoId, data){
+  if(!firestoreReady || !grupoId) return;
+  try{
+    // No guardar imágenes base64 grandes en Firestore
+    const dataToSave = {...data};
+    delete dataToSave.uploadedImages;
+    await db.collection('grupos').doc(grupoId).set(dataToSave, {merge: true});
+  }catch(e){ console.warn('Firestore save error:', e.message); }
+}
+
+// Cargar datos del grupo desde Firestore
+async function loadFromFirestore(grupoId){
+  if(!firestoreReady || !grupoId) return null;
+  try{
+    const doc = await db.collection('grupos').doc(grupoId).get();
+    return doc.exists ? doc.data() : null;
+  }catch(e){ console.warn('Firestore load error:', e.message); return null; }
+}
+
+// Escuchar cambios en tiempo real (para el docente)
+function subscribeToRealtime(callback){
+  if(!firestoreReady) return;
+  if(unsubscribeRealtime) unsubscribeRealtime();
+  unsubscribeRealtime = db.collection('grupos').onSnapshot(snapshot=>{
+    const grupos = [];
+    snapshot.forEach(doc => grupos.push({id: doc.id, ...doc.data()}));
+    callback(grupos);
+  });
+}
+
+// ── APP CONSTANTS ──────────────────────────────
 const TOTAL_PHASES=14;
 const SECS=['Portada','Abstract','Misión & Visión','Valores','Objetivos','🎨 Marca','📸 Imágenes','Canvas','Mercado','Marketing','💰 Costos','🗳️ Encuesta','Cronograma','Pitch','Exportar'];
 const ICONS=['🏷️','📄','🎯','💎','🏹','🎨','📸','🗺️','🔍','📣','💰','🗳️','📅','🎤','📥'];
@@ -1552,11 +1611,13 @@ function updatePitch(){let t=0;['pitch1','pitch2','pitch3','pitch4','pitch5'].fo
 function v(id){return document.getElementById(id)?.value||'';}
 function save(){
   try{
-    // No guardar imágenes en base64 si son muy grandes — guardar solo primeras 3
     const imgs=uploadedImages.slice(0,6).map(i=>({src:i.src.length>500000?i.src.substring(0,500000):i.src,name:i.name}));
-    localStorage.setItem('pe6',JSON.stringify({p_empresa:v('p_empresa'),p_slogan:v('p_slogan'),p_sector:v('p_sector'),p_fecha:v('p_fecha'),p_docente:v('p_docente'),integrantes,valores,abstract:v('abstract'),mision:v('mision'),vision:v('vision'),obj_general:v('obj_general'),objetivosEsp,brand_logo:v('brand_logo'),brand_personalidad:v('brand_personalidad'),brand_color1:v('brand_color1'),brand_color2:v('brand_color2'),brand_color3:v('brand_color3'),brand_color4:v('brand_color4'),brandFont,c_socios:v('c_socios'),c_actividades:v('c_actividades'),c_propuesta:v('c_propuesta'),c_relacion:v('c_relacion'),c_segmento:v('c_segmento'),c_recursos:v('c_recursos'),c_canales:v('c_canales'),c_costos:v('c_costos'),c_ingresos:v('c_ingresos'),em_cliente:v('em_cliente'),em_tamano:v('em_tamano'),em_competencia:v('em_competencia'),em_tendencias:v('em_tendencias'),em_ventaja:v('em_ventaja'),mk_precio:v('mk_precio'),mk_canales:v('mk_canales'),mk_promo:v('mk_promo'),mk_valor:v('mk_valor'),costosFijos,costosVariables,precio_venta:v('precio_venta'),proj_u1:v('proj_u1'),proj_growth:v('proj_growth'),surveyQuestions,cronos,pitch1:v('pitch1'),pitch2:v('pitch2'),pitch3:v('pitch3'),pitch4:v('pitch4'),pitch5:v('pitch5'),sectionState,xp,earnedLogros:[...earnedLogros],approvalStreak,chatHistory,uploadedImages:imgs}));
-  }catch(e){console.warn('Storage full, saving without images');try{localStorage.setItem('pe6_noimg','1');}catch(e2){}}
-  // Fase 2: sync lightweight snapshot to active grupo
+    const data={p_empresa:v('p_empresa'),p_slogan:v('p_slogan'),p_sector:v('p_sector'),p_fecha:v('p_fecha'),p_docente:v('p_docente'),integrantes,valores,abstract:v('abstract'),mision:v('mision'),vision:v('vision'),obj_general:v('obj_general'),objetivosEsp,brand_logo:v('brand_logo'),brand_personalidad:v('brand_personalidad'),brand_color1:v('brand_color1'),brand_color2:v('brand_color2'),brand_color3:v('brand_color3'),brand_color4:v('brand_color4'),brandFont,c_socios:v('c_socios'),c_actividades:v('c_actividades'),c_propuesta:v('c_propuesta'),c_relacion:v('c_relacion'),c_segmento:v('c_segmento'),c_recursos:v('c_recursos'),c_canales:v('c_canales'),c_costos:v('c_costos'),c_ingresos:v('c_ingresos'),em_cliente:v('em_cliente'),em_tamano:v('em_tamano'),em_competencia:v('em_competencia'),em_tendencias:v('em_tendencias'),em_ventaja:v('em_ventaja'),mk_precio:v('mk_precio'),mk_canales:v('mk_canales'),mk_promo:v('mk_promo'),mk_valor:v('mk_valor'),costosFijos,costosVariables,precio_venta:v('precio_venta'),proj_u1:v('proj_u1'),proj_growth:v('proj_growth'),surveyQuestions,cronos,pitch1:v('pitch1'),pitch2:v('pitch2'),pitch3:v('pitch3'),pitch4:v('pitch4'),pitch5:v('pitch5'),sectionState,xp,earnedLogros:[...earnedLogros],approvalStreak,chatHistory,uploadedImages:imgs};
+    localStorage.setItem('pe6',JSON.stringify(data));
+    // Sync a Firestore en tiempo real
+    if(grupoActivo) saveToFirestore(grupoActivo, {...data, nombre:currentSession?.nombre||'', grado:currentSession?.grado||'', updatedAt: new Date().toISOString()});
+  }catch(e){console.warn('Storage full');try{localStorage.setItem('pe6_noimg','1');}catch(e2){}}
+  // Sync lightweight snapshot to active grupo
   if(typeof grupos!=='undefined'&&grupos.length){
     const g=grupos.find(g=>g.id===grupoActivo);
     if(g)try{
@@ -2964,7 +3025,7 @@ function doLogin(){
   }
 }
 
-function enterApp(session){
+async function enterApp(session){
   currentSession=session;
   localStorage.setItem(SESSION_KEY,JSON.stringify(session));
 
@@ -2983,6 +3044,31 @@ function enterApp(session){
 
   // Set active grupo and load its data
   grupoActivo=session.grupoId;
+
+  // Intentar cargar datos desde Firestore
+  if(firestoreReady){
+    showToast('⏳ Cargando datos...');
+    const firestoreData = await loadFromFirestore(session.grupoId);
+    if(firestoreData){
+      // Guardar en localStorage para acceso offline
+      localStorage.setItem('pe6', JSON.stringify(firestoreData));
+    }
+    // Si es docente, suscribirse a cambios en tiempo real
+    if(session.rol==='docente'){
+      subscribeToRealtime((gruposData)=>{
+        gruposData.forEach(g=>{
+          const existing = grupos.find(gr=>gr.id===g.id);
+          if(existing) existing.data = g;
+          else grupos.push({id:g.id, nombre:g.nombre||g.id, grado:g.grado||'', data:g});
+        });
+        saveGrupos();
+        renderGrupoBar();
+        // Si el dashboard está abierto, actualizarlo
+        if(!document.getElementById('dashModal').classList.contains('hidden')) renderDashboard();
+      });
+    }
+  }
+
   loadGrupoSnapshot();
   renderGrupoBar();
 
@@ -3237,7 +3323,6 @@ function loadDemo(){
 }
 
 // ── INIT ──────────────────────────────────────
-// ── INIT ──────────────────────────────────────
 loadTheme();
 try{load();}catch(e){}
 try{initGrupos();}catch(e){}
@@ -3250,6 +3335,11 @@ try{if(!cronos.length){for(let i=0;i<4;i++)cronos.push({act:'',resp:'',inicio:''
 try{while(objetivosEsp.length<3)objetivosEsp.push('');}catch(e){}
 try{if(!surveyQuestions.length){addSurveyQ('opcion');addSurveyQ('escala');addSurveyQ('abierta');addSurveyQ('opcion');}}catch(e){}
 try{updateWorkerBadge();}catch(e){}
+
+// Inicializar Firebase cuando todo esté listo
+window.addEventListener('load', ()=>{
+  initFirebase();
+});
 
 // Flujo obligatorio: primero Worker, luego Login
 setTimeout(()=>{
