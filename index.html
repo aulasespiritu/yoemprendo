@@ -2920,6 +2920,22 @@ function loadAuthUsers(){
 }
 function saveAuthUsers(users){
   localStorage.setItem(AUTH_KEY,JSON.stringify(users));
+  // Sincronizar usuarios a Firestore
+  if(firestoreReady){
+    db.collection('config').doc('users').set({users: users})
+      .catch(e=>console.warn('Error guardando usuarios en Firestore:', e.message));
+  }
+}
+async function syncUsersFromFirestore(){
+  if(!firestoreReady) return;
+  try{
+    const doc = await db.collection('config').doc('users').get();
+    if(doc.exists && doc.data().users){
+      const users = doc.data().users;
+      localStorage.setItem(AUTH_KEY, JSON.stringify(users));
+      console.log('✅ Usuarios sincronizados desde Firestore:', users.length);
+    }
+  }catch(e){ console.warn('Error cargando usuarios de Firestore:', e.message); }
 }
 
 function switchLoginTab(tab){
@@ -3137,7 +3153,9 @@ function confirmLogout(){
   switchLoginTab('registro');
 }
 
-function checkSession(){
+async function checkSession(){
+  // Primero sincronizar usuarios desde Firestore
+  await syncUsersFromFirestore();
   // Check for saved session
   try{
     const saved=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');
