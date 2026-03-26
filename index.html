@@ -292,6 +292,25 @@ textarea{min-height:85px}
 
 /* ── DASHBOARD DOCENTE ── */
 .dash-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:16px}
+.dash-tab{padding:7px 14px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-size:.78rem;font-weight:600;transition:all .2s}
+.dash-tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.chat-list{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
+.chat-equipo-item{background:var(--card2);border-radius:12px;padding:12px;border:1px solid var(--border);cursor:pointer;transition:all .2s}
+.chat-equipo-item:hover{border-color:var(--accent)}
+.chat-equipo-item .chat-eq-name{font-weight:700;font-size:.85rem}
+.chat-equipo-item .chat-eq-preview{font-size:.73rem;color:var(--muted);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat-eq-unread{background:var(--accent2);color:#fff;border-radius:20px;padding:1px 7px;font-size:.68rem;font-weight:800}
+.chat-messages{display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;padding:8px;background:var(--bg);border-radius:10px;border:1px solid var(--border);margin-bottom:10px}
+.chat-msg{max-width:80%;padding:8px 12px;border-radius:12px;font-size:.8rem;line-height:1.5}
+.chat-msg.docente{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;align-self:flex-end;border-radius:12px 12px 2px 12px}
+.chat-msg.estudiante{background:var(--card2);color:var(--text);align-self:flex-start;border-radius:12px 12px 12px 2px}
+.chat-msg .chat-msg-who{font-size:.68rem;opacity:.7;margin-bottom:2px;font-weight:700}
+.chat-msg .chat-msg-time{font-size:.65rem;opacity:.6;margin-top:2px;text-align:right}
+.user-item{display:flex;align-items:center;justify-content:space-between;background:var(--card2);border-radius:10px;padding:10px 12px;border:1px solid var(--border);margin-bottom:8px}
+.user-item-info{display:flex;flex-direction:column}
+.user-item-name{font-weight:700;font-size:.83rem}
+.user-item-meta{font-size:.72rem;color:var(--muted)}
+.user-item-actions{display:flex;gap:6px}
 .dash-stat{background:var(--card2);border-radius:12px;padding:14px;text-align:center;border:1px solid var(--border)}
 .dash-stat-val{font-size:1.8rem;font-weight:900;color:var(--accent);line-height:1}
 .dash-stat-lbl{font-size:.7rem;color:var(--muted);margin-top:4px}
@@ -589,6 +608,7 @@ textarea{min-height:85px}
       </div>
       <div class="notif-fab-wrap">
         <button class="theme-btn" id="notifBtn" onclick="toggleNotifCenter()" title="Notificaciones">🔔</button>
+        <button class="theme-btn" id="btnMensajesEstudiante" onclick="abrirChatEstudiante()" title="Mensajes del docente" style="display:none">💬</button>
         <span class="notif-badge" id="notifBadge" style="display:none">0</span>
       </div>
       <button class="theme-btn" id="themeBtn" onclick="toggleTheme()">🌙</button>
@@ -966,10 +986,16 @@ textarea{min-height:85px}
       </div>
       <button class="modal-close" onclick="document.getElementById('dashModal').classList.add('hidden')">×</button>
     </div>
+    <!-- Pestañas del panel -->
+    <div style="display:flex;gap:4px;padding:8px 16px;border-bottom:1px solid var(--border);background:var(--card2)">
+      <button class="dash-tab active" id="dashTab1" onclick="switchDashTab('ranking')">📊 Ranking</button>
+      <button class="dash-tab" id="dashTab2" onclick="switchDashTab('mensajes')">💬 Mensajes</button>
+      <button class="dash-tab" id="dashTab3" onclick="switchDashTab('usuarios')">👥 Usuarios</button>
+    </div>
     <div class="modal-body" id="dashBody" style="padding:16px"></div>
     <div class="modal-footer">
       <button class="btn-modal btn-modal-sec" onclick="document.getElementById('dashModal').classList.add('hidden')">Cerrar</button>
-      <button class="btn-modal btn-modal-sec" onclick="exportRankingCSV()">⬇️ CSV Ranking</button>
+      <button class="btn-modal btn-modal-sec" onclick="exportRankingCSV()">⬇️ CSV</button>
       <button class="btn-modal btn-modal-mentor" onclick="openDocenteCalificaciones()">📋 Calificaciones</button>
     </div>
   </div>
@@ -1940,13 +1966,13 @@ function openDashboard(){
       close();
       saveGrupoSnapshot();
       document.getElementById('dashModal').classList.remove('hidden');
-      renderDashboard();
+      currentDashTab='ranking';switchDashTab('ranking');
       showToast('🔑 Contraseña guardada. ¡No la olvides!');
     } else if(val===savedPass){
       close();
       saveGrupoSnapshot();
       document.getElementById('dashModal').classList.remove('hidden');
-      renderDashboard();
+      currentDashTab='ranking';switchDashTab('ranking');
     } else {
       input.style.borderColor='var(--warn)';
       input.value='';
@@ -2024,6 +2050,237 @@ function renderDashboard(){
       `).join('')}
     </div>
   </div>`;
+}
+
+// ── DASHBOARD TABS ────────────────────────────
+let currentDashTab = 'ranking';
+let currentChatEquipo = null;
+let unsubscribeChat = null;
+
+function switchDashTab(tab){
+  currentDashTab = tab;
+  document.querySelectorAll('.dash-tab').forEach(t=>t.classList.remove('active'));
+  const tabMap = {ranking:'dashTab1', mensajes:'dashTab2', usuarios:'dashTab3'};
+  document.getElementById(tabMap[tab]).classList.add('active');
+  if(tab==='ranking') renderDashboard();
+  else if(tab==='mensajes') renderMensajes();
+  else if(tab==='usuarios') renderUsuarios();
+}
+
+// ── MENSAJES ──────────────────────────────────
+function renderMensajes(){
+  const body = document.getElementById('dashBody');
+  const users = loadAuthUsers().filter(u=>u.rol==='estudiante');
+  if(!users.length){
+    body.innerHTML='<p style="color:var(--muted);text-align:center;padding:20px">No hay estudiantes registrados aún.</p>';
+    return;
+  }
+  body.innerHTML=`
+    <h3 style="font-size:.85rem;margin-bottom:12px">💬 Mensajes privados por equipo</h3>
+    <div class="chat-list" id="chatList">
+      ${users.map(u=>`
+        <div class="chat-equipo-item" onclick="openChatConEquipo('${u.id}','${u.nombre}')">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div class="chat-eq-name">🎓 ${u.nombre} <span style="font-size:.7rem;color:var(--muted)">(${u.grado||''})</span></div>
+            <span class="chat-eq-unread" id="unread_${u.id}" style="display:none">●</span>
+          </div>
+          <div class="chat-eq-preview" id="preview_${u.id}">Sin mensajes aún</div>
+        </div>
+      `).join('')}
+    </div>`;
+  // Cargar previews de últimos mensajes
+  users.forEach(u=>loadChatPreview(u.id));
+}
+
+async function loadChatPreview(grupoId){
+  if(!firestoreReady) return;
+  try{
+    const snap = await db.collection('mensajes').doc(grupoId).collection('chat')
+      .orderBy('timestamp','desc').limit(1).get();
+    if(!snap.empty){
+      const msg = snap.docs[0].data();
+      const el = document.getElementById('preview_'+grupoId);
+      if(el) el.textContent = (msg.rol==='docente'?'Tú: ':'Estudiante: ') + msg.texto.substring(0,50);
+    }
+  }catch(e){}
+}
+
+function openChatConEquipo(grupoId, nombre){
+  currentChatEquipo = {id:grupoId, nombre};
+  const body = document.getElementById('dashBody');
+  body.innerHTML=`
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+      <button onclick="renderMensajes()" style="background:transparent;border:1px solid var(--border);border-radius:8px;padding:4px 10px;color:var(--text);cursor:pointer;font-size:.78rem">← Volver</button>
+      <h3 style="font-size:.85rem;margin:0">💬 Chat con ${nombre}</h3>
+    </div>
+    <div class="chat-messages" id="chatMsgsDocente"></div>
+    <div style="display:flex;gap:8px">
+      <input id="chatInputDocente" type="text" placeholder="Escribe un mensaje..." 
+        style="flex:1;padding:10px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg);color:var(--text);font-size:.82rem"
+        onkeydown="if(event.key==='Enter')enviarMensajeDocente()"/>
+      <button onclick="enviarMensajeDocente()" style="padding:10px 16px;border-radius:10px;border:none;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;cursor:pointer;font-weight:800">Enviar</button>
+    </div>`;
+  suscribirseAlChat(grupoId);
+}
+
+function suscribirseAlChat(grupoId){
+  if(!firestoreReady) return;
+  if(unsubscribeChat) unsubscribeChat();
+  unsubscribeChat = db.collection('mensajes').doc(grupoId).collection('chat')
+    .orderBy('timestamp','asc')
+    .onSnapshot(snap=>{
+      const el = document.getElementById('chatMsgsDocente');
+      if(!el) return;
+      el.innerHTML = snap.docs.map(doc=>{
+        const m = doc.data();
+        const esDocente = m.rol==='docente';
+        const hora = m.timestamp?.toDate ? m.timestamp.toDate().toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}) : '';
+        return `<div class="chat-msg ${esDocente?'docente':'estudiante'}">
+          <div class="chat-msg-who">${esDocente?'👨‍🏫 Docente':'🎓 '+m.quien}</div>
+          ${m.texto}
+          <div class="chat-msg-time">${hora}</div>
+        </div>`;
+      }).join('') || '<p style="color:var(--muted);text-align:center;font-size:.78rem">Sin mensajes aún</p>';
+      el.scrollTop = el.scrollHeight;
+    });
+}
+
+async function enviarMensajeDocente(){
+  const inp = document.getElementById('chatInputDocente');
+  if(!inp||!inp.value.trim()) return;
+  const texto = inp.value.trim();
+  inp.value='';
+  if(!firestoreReady||!currentChatEquipo) return;
+  try{
+    await db.collection('mensajes').doc(currentChatEquipo.id).collection('chat').add({
+      texto, rol:'docente', quien:'Docente',
+      timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  }catch(e){ showToast('⚠️ Error al enviar mensaje'); }
+}
+
+// ── GESTIÓN DE USUARIOS ───────────────────────
+function renderUsuarios(){
+  const body = document.getElementById('dashBody');
+  const users = loadAuthUsers();
+  body.innerHTML=`
+    <h3 style="font-size:.85rem;margin-bottom:12px">👥 Usuarios registrados <span class="fase-badge">${users.length}</span></h3>
+    ${users.map(u=>`
+      <div class="user-item">
+        <div class="user-item-info">
+          <div class="user-item-name">${u.rol==='docente'?'👨‍🏫':'🎓'} ${u.nombre}</div>
+          <div class="user-item-meta">${u.grado||''} · ${u.rol}</div>
+        </div>
+        <div class="user-item-actions">
+          ${u.rol!=='docente'?`
+            <button onclick="resetearProgreso('${u.id}','${u.nombre}')" style="padding:5px 10px;border-radius:8px;border:1px solid var(--warn);background:transparent;color:var(--warn);cursor:pointer;font-size:.72rem">🔄 Reset</button>
+            <button onclick="eliminarUsuario('${u.id}','${u.nombre}')" style="padding:5px 10px;border-radius:8px;border:none;background:var(--warn);color:#fff;cursor:pointer;font-size:.72rem">🗑️ Eliminar</button>
+          `:'<span style="font-size:.72rem;color:var(--muted)">Admin</span>'}
+        </div>
+      </div>
+    `).join('')}`;
+}
+
+function eliminarUsuario(id, nombre){
+  if(!confirm(`¿Eliminar al usuario "${nombre}"? Se borrarán todos sus datos.`)) return;
+  // Eliminar de auth
+  const users = loadAuthUsers().filter(u=>u.id!==id);
+  saveAuthUsers(users);
+  // Eliminar de grupos
+  const gs = grupos.filter(g=>g.id!==id);
+  grupos.length=0; gs.forEach(g=>grupos.push(g));
+  saveGrupos();
+  // Eliminar de Firestore
+  if(firestoreReady){
+    db.collection('grupos').doc(id).delete().catch(e=>{});
+    db.collection('mensajes').doc(id).delete().catch(e=>{});
+  }
+  showToast(`🗑️ Usuario "${nombre}" eliminado`);
+  renderUsuarios();
+}
+
+function resetearProgreso(id, nombre){
+  if(!confirm(`¿Resetear el progreso de "${nombre}"? Los datos del plan se borrarán.`)) return;
+  // Resetear en grupos
+  const g = grupos.find(gr=>gr.id===id);
+  if(g) g.data={};
+  saveGrupos();
+  // Resetear en Firestore
+  if(firestoreReady){
+    db.collection('grupos').doc(id).set({sectionState:Array(14).fill('pending'),xp:0},{merge:false}).catch(e=>{});
+  }
+  showToast(`🔄 Progreso de "${nombre}" reseteado`);
+  renderUsuarios();
+}
+
+// ── CHAT ESTUDIANTE ───────────────────────────
+function renderChatEstudiante(){
+  if(!currentSession||currentSession.rol==='docente') return;
+  // Mostrar botón de mensajes en el header si hay mensajes sin leer
+  if(!firestoreReady) return;
+  // Suscribirse a mensajes del docente
+  db.collection('mensajes').doc(currentSession.grupoId).collection('chat')
+    .orderBy('timestamp','asc')
+    .onSnapshot(snap=>{
+      // Mostrar indicador de mensaje nuevo
+      const hayNuevo = snap.docs.some(d=>d.data().rol==='docente' && !d.data().leidoPorEstudiante);
+      const btn = document.getElementById('btnMensajesEstudiante');
+      if(btn) btn.style.background = hayNuevo ? 'var(--accent2)' : '';
+    });
+}
+
+function abrirChatEstudiante(){
+  if(!currentSession||!firestoreReady) return;
+  const overlay = document.createElement('div');
+  overlay.id='chatEstOverlay';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:3000;display:flex;align-items:center;justify-content:center;padding:16px';
+  overlay.innerHTML=`
+    <div style="background:var(--card);border-radius:18px;width:100%;max-width:420px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.5);display:flex;flex-direction:column;max-height:80vh">
+      <div style="background:linear-gradient(135deg,var(--accent),var(--accent2));padding:16px;display:flex;justify-content:space-between;align-items:center">
+        <div style="font-weight:800;color:#fff">💬 Mensajes del Docente</div>
+        <button onclick="document.getElementById('chatEstOverlay').remove()" style="background:transparent;border:none;color:#fff;font-size:1.3rem;cursor:pointer">×</button>
+      </div>
+      <div class="chat-messages" id="chatMsgsEst" style="flex:1;margin:12px;max-height:300px"></div>
+      <div style="display:flex;gap:8px;padding:12px">
+        <input id="chatInputEst" type="text" placeholder="Responder al docente..."
+          style="flex:1;padding:10px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg);color:var(--text);font-size:.82rem"
+          onkeydown="if(event.key==='Enter')enviarMensajeEstudiante()"/>
+        <button onclick="enviarMensajeEstudiante()" style="padding:10px 14px;border-radius:10px;border:none;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;cursor:pointer;font-weight:800">→</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  // Suscribirse al chat
+  if(unsubscribeChat) unsubscribeChat();
+  unsubscribeChat = db.collection('mensajes').doc(currentSession.grupoId).collection('chat')
+    .orderBy('timestamp','asc')
+    .onSnapshot(snap=>{
+      const el = document.getElementById('chatMsgsEst');
+      if(!el) return;
+      el.innerHTML = snap.docs.map(doc=>{
+        const m = doc.data();
+        const esDocente = m.rol==='docente';
+        const hora = m.timestamp?.toDate ? m.timestamp.toDate().toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}) : '';
+        return `<div class="chat-msg ${esDocente?'docente':'estudiante'}">
+          <div class="chat-msg-who">${esDocente?'👨‍🏫 Docente':'🎓 '+m.quien}</div>
+          ${m.texto}
+          <div class="chat-msg-time">${hora}</div>
+        </div>`;
+      }).join('') || '<p style="color:var(--muted);text-align:center;font-size:.78rem;padding:20px">Sin mensajes aún. El docente te escribirá aquí.</p>';
+      el.scrollTop = el.scrollHeight;
+    });
+}
+
+async function enviarMensajeEstudiante(){
+  const inp = document.getElementById('chatInputEst');
+  if(!inp||!inp.value.trim()||!currentSession) return;
+  const texto = inp.value.trim();
+  inp.value='';
+  try{
+    await db.collection('mensajes').doc(currentSession.grupoId).collection('chat').add({
+      texto, rol:'estudiante', quien:currentSession.nombre,
+      timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  }catch(e){ showToast('⚠️ Error al enviar'); }
 }
 
 function exportRankingCSV(){
@@ -3106,6 +3363,10 @@ async function enterApp(session){
 
   showToast(`👋 Bienvenido, <strong>${session.nombre}</strong>`);
   setTimeout(()=>initTutorial(), 800);
+  // Mostrar botón de chat solo para estudiantes
+  const btnChat = document.getElementById('btnMensajesEstudiante');
+  if(btnChat) btnChat.style.display = session.rol==='estudiante' ? '' : 'none';
+  if(session.rol==='estudiante') renderChatEstudiante();
 }
 
 function updateSessionChip(){
@@ -3238,7 +3499,8 @@ function verifyDashPass(){
   document.getElementById('dashPassOverlay').remove();
   saveGrupoSnapshot();
   document.getElementById('dashModal').classList.remove('hidden');
-  renderDashboard();
+  currentDashTab='ranking';
+  switchDashTab('ranking');
 }
 
 function loadDemo(){
