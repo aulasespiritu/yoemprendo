@@ -3237,7 +3237,7 @@ function doRegistro(){
     document.getElementById('rolDocente').style.display='none';
     return;
   }
-  if(users.find(u=>u.nombre.toLowerCase()===nombre.toLowerCase())){
+  if(users.find(u=>u.nombre && u.nombre.toLowerCase()===nombre.toLowerCase())){
     errEl.textContent='⚠️ Ya existe un equipo con ese nombre';return;
   }
 
@@ -3287,7 +3287,7 @@ function doLogin(){
     if(!nombre){errEl.textContent='⚠️ Escribe el nombre de tu equipo';return;}
     if(!pass){errEl.textContent='⚠️ Ingresa tu contraseña';return;}
     const users=loadAuthUsers();
-    const user=users.find(u=>u.nombre.toLowerCase()===nombre.toLowerCase()&&u.rol==='estudiante');
+    const user=users.find(u=>u.nombre && u.nombre.toLowerCase()===nombre.toLowerCase()&&u.rol==='estudiante');
     if(!user){errEl.textContent='❌ Equipo no encontrado. Verifica el nombre.';return;}
     if(user.passHash!==simpleHash(pass)){
       errEl.textContent='❌ Contraseña incorrecta';
