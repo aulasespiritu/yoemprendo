@@ -3237,7 +3237,7 @@ function doRegistro(){
     document.getElementById('rolDocente').style.display='none';
     return;
   }
-  if(users.find(u=>u.nombre && u.nombre.toLowerCase()===nombre.toLowerCase())){
+  if(users.find(u=>u.nombre.toLowerCase()===nombre.toLowerCase())){
     errEl.textContent='⚠️ Ya existe un equipo con ese nombre';return;
   }
 
@@ -3287,7 +3287,7 @@ function doLogin(){
     if(!nombre){errEl.textContent='⚠️ Escribe el nombre de tu equipo';return;}
     if(!pass){errEl.textContent='⚠️ Ingresa tu contraseña';return;}
     const users=loadAuthUsers();
-    const user=users.find(u=>u.nombre && u.nombre.toLowerCase()===nombre.toLowerCase()&&u.rol==='estudiante');
+    const user=users.find(u=>u.nombre.toLowerCase()===nombre.toLowerCase()&&u.rol==='estudiante');
     if(!user){errEl.textContent='❌ Equipo no encontrado. Verifica el nombre.';return;}
     if(user.passHash!==simpleHash(pass)){
       errEl.textContent='❌ Contraseña incorrecta';
@@ -3321,9 +3321,21 @@ async function enterApp(session){
   // Intentar cargar datos desde Firestore
   if(firestoreReady){
     showToast('⏳ Cargando datos...');
+    // Cargar todos los grupos desde Firestore
+    try{
+      const snap = await db.collection('grupos').get();
+      if(!snap.empty){
+        grupos.length=0;
+        snap.forEach(doc=>{
+          const d=doc.data();
+          grupos.push({id:doc.id, nombre:d.nombre||doc.id, grado:d.grado||'Grado 11', data:d});
+        });
+        saveGrupos();
+      }
+    }catch(e){ console.warn('Error cargando grupos:', e.message); }
+
     const firestoreData = await loadFromFirestore(session.grupoId);
     if(firestoreData){
-      // Guardar en localStorage para acceso offline
       localStorage.setItem('pe6', JSON.stringify(firestoreData));
     }
     // Si es docente, suscribirse a cambios en tiempo real
